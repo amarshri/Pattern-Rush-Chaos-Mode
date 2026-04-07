@@ -17,7 +17,7 @@ export const MultiRound = ({
   const rng = useMemo(() => mulberry32(round.seed), [round.seed]);
   const memoryCount = clamp(Math.round(2 + round.difficulty.score * 0.35), 2, 4);
   const promptCount = clamp(Math.round(6 + round.difficulty.score * 0.5), 6, 10);
-  const promptWindow = Math.round(1700 * round.difficulty.speedFactor + 350);
+  const promptWindow = round.timeLimitMs;
 
   const memorySet = useMemo(() => {
     const shuffled = [...SYMBOLS].sort(() => rng() - 0.5);
@@ -115,13 +115,13 @@ export const MultiRound = ({
         <div className="mt-5 grid grid-cols-2 gap-3">
           <button
             onClick={() => handleChoice("SAFE")}
-            className="rounded-2xl border border-white/10 bg-emerald-400/80 py-3 text-sm font-semibold text-emerald-950"
+            className="rounded-2xl border border-white/10 bg-emerald-400/80 py-4 text-base font-semibold text-emerald-950"
           >
             SAFE
           </button>
           <button
             onClick={() => handleChoice("PASS")}
-            className="rounded-2xl border border-white/10 bg-white/10 py-3 text-sm font-semibold text-white"
+            className="rounded-2xl border border-white/10 bg-white/10 py-4 text-base font-semibold text-white"
           >
             PASS
           </button>

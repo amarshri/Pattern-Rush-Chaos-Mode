@@ -21,7 +21,7 @@ export const ColorRound = ({
 }) => {
   const rng = useMemo(() => mulberry32(round.seed), [round.seed]);
   const totalPrompts = clamp(Math.round(5 + round.difficulty.score * 0.6), 5, 9);
-  const timePerPrompt = Math.round(1900 * round.difficulty.speedFactor + 400);
+  const timePerPrompt = round.timeLimitMs;
   const switchIndex = round.variation === "Switch Rule" ? Math.floor(totalPrompts / 2) : -1;
 
   const prompts = useMemo(
@@ -122,7 +122,7 @@ export const ColorRound = ({
           <button
             key={color.name}
             onClick={() => handleAnswer(color.name)}
-            className="rounded-2xl border border-white/10 bg-white/10 py-3 text-sm font-semibold text-white hover:bg-white/20"
+            className="rounded-2xl border border-white/10 bg-white/10 py-4 text-base font-semibold text-white hover:bg-white/20"
           >
             {color.name}
           </button>

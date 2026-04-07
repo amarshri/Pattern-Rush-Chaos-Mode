@@ -113,7 +113,17 @@ const makeRoundConfig = (
   const meta = ROUND_META[type];
   const variation = variationByType(type, rng);
   const rule = ruleByType(type, variation);
-  const timeLimitMs = Math.round(4200 * difficulty.speedFactor + 600);
+  const timeBand =
+    difficulty.level <= 3
+      ? [6, 8]
+      : difficulty.level <= 7
+        ? [5, 6]
+        : difficulty.level <= 12
+          ? [4, 5]
+          : [3, 4];
+  const baseSeconds = timeBand[0] + rng() * (timeBand[1] - timeBand[0]);
+  const adjustedSeconds = clamp(baseSeconds * (1.1 - difficulty.score * 0.03), timeBand[0], timeBand[1]);
+  const timeLimitMs = Math.round(adjustedSeconds * 1000);
   const targetCount = Math.round(3 + difficulty.score * 0.7 + rng() * 2);
 
   return {

@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createAdaptiveState, updateAdaptiveState } from "@/lib/game/adaptive";
 import { createLevel, roundSequence } from "@/lib/game/engine";
 import type {
@@ -27,7 +27,6 @@ import { ColorRound } from "@/components/game/rounds/ColorRound";
 import { SequenceRound } from "@/components/game/rounds/SequenceRound";
 import { ReactionRound } from "@/components/game/rounds/ReactionRound";
 import { MultiRound } from "@/components/game/rounds/MultiRound";
-import { ResultPanel } from "@/components/game/ResultPanel";
 import { StatsPanel } from "@/components/game/StatsPanel";
 import { SettingsPanel } from "@/components/game/SettingsPanel";
 import { isSupabaseEnabled, supabase } from "@/lib/supabase/client";
@@ -62,9 +61,12 @@ export const GameApp = () => {
   const [roundIndex, setRoundIndex] = useState(0);
   const [results, setResults] = useState<RoundResult[]>([]);
   const [screen, setScreen] = useState<"home" | "playing" | "results" | "stats" | "settings">("home");
-  const [introCount, setIntroCount] = useState(3);
-  const [showIntro, setShowIntro] = useState(true);
+  const [phase, setPhase] = useState<"intro" | "playing" | "failed" | "levelComplete">("intro");
+  const [introCount, setIntroCount] = useState(0);
+  const [flash, setFlash] = useState<"success" | "fail" | null>(null);
+  const [lastSessionStats, setLastSessionStats] = useState<ReturnType<typeof aggregateRoundStats> | null>(null);
   const [leaders, setLeaders] = useState<Array<{ user_id: string; high_score: number; brain_score: number }>>([]);
+  const transitionRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!isSupabaseEnabled || !supabase) return;
@@ -78,27 +80,36 @@ export const GameApp = () => {
       });
   }, []);
 
+  useEffect(
+    () => () => {
+      if (transitionRef.current) clearTimeout(transitionRef.current);
+    },
+    [],
+  );
+
   const currentRound = level?.rounds[roundIndex];
 
-  const triggerIntro = () => {
-    setIntroCount(3);
-    setShowIntro(true);
+  const getIntroSeconds = (round: RoundConfig) => 5 + (round.seed % 4);
+
+  const triggerIntro = (round: RoundConfig) => {
+    setPhase("intro");
+    setIntroCount(getIntroSeconds(round));
   };
 
   useEffect(() => {
-    if (!showIntro) return;
+    if (phase !== "intro" || !currentRound) return;
     const timer = setInterval(() => {
       setIntroCount((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          setShowIntro(false);
+          setPhase("playing");
           return 0;
         }
         return prev - 1;
       });
-    }, 650);
+    }, 1000);
     return () => clearInterval(timer);
-  }, [showIntro]);
+  }, [phase, currentRound]);
 
   const startGame = () => {
     const nextLevel = createLevel(
@@ -111,7 +122,8 @@ export const GameApp = () => {
     setResults([]);
     setScreen("playing");
     setProfile((prev) => storeSequence(prev, roundSequence(nextLevel)));
-    triggerIntro();
+    setPhase("intro");
+    triggerIntro(nextLevel.rounds[0]);
   };
 
   const finishLevel = async (roundResults: RoundResult[]) => {
@@ -122,13 +134,29 @@ export const GameApp = () => {
     };
     setProfile(updatedProfile);
     await syncProfile(updatedProfile, sessionStats);
-    setScreen("results");
+    setLastSessionStats(sessionStats);
+    setPhase("levelComplete");
+    if (transitionRef.current) clearTimeout(transitionRef.current);
+    transitionRef.current = setTimeout(() => {
+      const nextLevel = createLevel(
+        updatedProfile.level,
+        adaptive,
+        updatedProfile.lastSequence as unknown as RoundType[],
+      );
+      setLevel(nextLevel);
+      setRoundIndex(0);
+      setResults([]);
+      setProfile((prev) => storeSequence(prev, roundSequence(nextLevel)));
+      triggerIntro(nextLevel.rounds[0]);
+    }, 2400);
   };
 
   const handleRoundComplete = (result: RoundResult) => {
     const nextResults = [...results, result];
     setResults(nextResults);
     setAdaptive((prev) => updateAdaptiveState(prev, result));
+    setFlash(result.success ? "success" : "fail");
+    setTimeout(() => setFlash(null), 200);
 
     if (profile.settings.sound) {
       playTone(result.success ? 540 : 220, 0.14, 0.2);
@@ -137,15 +165,35 @@ export const GameApp = () => {
       hapticPulse(result.success ? 30 : [20, 40, 20]);
     }
 
+    if (!result.success) {
+      const sessionStats = aggregateRoundStats(nextResults);
+      setLastSessionStats(sessionStats);
+      setPhase("failed");
+      if (transitionRef.current) clearTimeout(transitionRef.current);
+      transitionRef.current = setTimeout(() => setScreen("home"), 2600);
+      return;
+    }
+
     if (level && roundIndex + 1 >= level.rounds.length) {
       finishLevel(nextResults);
     } else {
-      setRoundIndex((prev) => prev + 1);
-      triggerIntro();
+      const nextIndex = roundIndex + 1;
+      setRoundIndex(nextIndex);
+      if (level) triggerIntro(level.rounds[nextIndex]);
     }
   };
 
   const sessionStats = useMemo(() => (results.length ? aggregateRoundStats(results) : null), [results]);
+  const gameState = useMemo(
+    () => ({
+      level: level?.levelIndex ?? profile.level,
+      roundIndex,
+      phase,
+      timer: introCount,
+      accuracy: sessionStats?.accuracy ?? 0,
+    }),
+    [introCount, level?.levelIndex, phase, profile.level, roundIndex, sessionStats?.accuracy],
+  );
 
   const adaptiveHint = useMemo(() => {
     const score = adaptive.skill;
@@ -154,33 +202,40 @@ export const GameApp = () => {
     return "Holding steady difficulty.";
   }, [adaptive.skill]);
 
+  const mainClass =
+    screen === "playing"
+      ? "relative mx-auto flex h-screen w-full max-w-6xl flex-col overflow-hidden px-4 py-4 sm:px-6"
+      : "relative mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-8 px-5 pb-16 pt-10 sm:px-8";
+
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#1d1f33_0%,_#0b0d16_45%,_#07080d_100%)] text-white">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -left-40 top-10 h-80 w-80 rounded-full bg-cyan-500/10 blur-[120px]" />
         <div className="absolute right-0 top-0 h-72 w-72 rounded-full bg-fuchsia-500/10 blur-[120px]" />
       </div>
-      <main className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-8 px-5 pb-16 pt-10 sm:px-8">
-        <header className="flex flex-wrap items-center justify-between gap-6">
-          <div>
-            <p className="text-xs uppercase tracking-[0.45em] text-white/50">Pattern Rush</p>
-            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Chaos Mode</h1>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <button
-              onClick={() => setScreen("stats")}
-              className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/70 hover:bg-white/10"
-            >
-              Stats
-            </button>
-            <button
-              onClick={() => setScreen("settings")}
-              className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/70 hover:bg-white/10"
-            >
-              Settings
-            </button>
-          </div>
-        </header>
+      <main className={mainClass}>
+        {screen !== "playing" && (
+          <header className="flex flex-wrap items-center justify-between gap-6">
+            <div>
+              <p className="text-xs uppercase tracking-[0.45em] text-white/50">Pattern Rush</p>
+              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Chaos Mode</h1>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={() => setScreen("stats")}
+                className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/70 hover:bg-white/10"
+              >
+                Stats
+              </button>
+              <button
+                onClick={() => setScreen("settings")}
+                className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/70 hover:bg-white/10"
+              >
+                Settings
+              </button>
+            </div>
+          </header>
+        )}
 
         {screen === "home" && (
           <section className="grid gap-6 lg:grid-cols-[1.3fr_1fr]">
@@ -244,57 +299,101 @@ export const GameApp = () => {
         )}
 
         {screen === "playing" && level && currentRound && (
-          <section className="grid gap-6">
-            <div className="flex flex-wrap items-center justify-between gap-4 text-xs uppercase tracking-[0.3em] text-white/50">
-              <span>Level {level.levelIndex}</span>
-              <span>Difficulty {currentRound.difficulty.score.toFixed(1)}</span>
-              <span>{adaptiveHint}</span>
-            </div>
-
-            <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-sky-400 to-fuchsia-400 transition-all"
-                style={{ width: `${((roundIndex + 1) / level.rounds.length) * 100}%` }}
-              />
-            </div>
-
-            {showIntro ? (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="rounded-3xl border border-white/10 bg-white/5 p-8 text-center"
-              >
-                <p className="text-xs uppercase tracking-[0.35em] text-white/50">{currentRound.label}</p>
-                <h2 className="mt-4 text-2xl font-semibold">{currentRound.intro}</h2>
-                <p className="mt-2 text-white/60">{currentRound.rule}</p>
-                <div className="mt-6 text-5xl font-semibold text-white/80">{introCount}</div>
-              </motion.div>
-            ) : (
-              <RoundShell round={currentRound} roundIndex={roundIndex} totalRounds={level.rounds.length}>
-                <RoundRenderer round={currentRound} onComplete={handleRoundComplete} />
-              </RoundShell>
-            )}
-          </section>
-        )}
-
-        {screen === "results" && sessionStats && (
-          <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-            <ResultPanel stats={sessionStats} level={profile.level - 1} />
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-              <h3 className="text-lg font-semibold uppercase tracking-[0.25em] text-white/70">Next Move</h3>
-              <p className="mt-4 text-white/60">
-                You cleared {sessionStats.successCount} rounds with {(sessionStats.accuracy * 100).toFixed(1)}%
-                accuracy. Ready for the next level?
-              </p>
-              <div className="mt-6 flex flex-wrap gap-3">
-                <PrimaryButton onClick={startGame}>Next Level</PrimaryButton>
-                <button
-                  onClick={() => setScreen("home")}
-                  className="rounded-full border border-white/15 px-5 py-3 text-xs uppercase tracking-[0.2em] text-white/70 hover:bg-white/10"
-                >
-                  Home
-                </button>
+          <section className="flex h-screen flex-col overflow-hidden lg:flex-row">
+            <aside className="flex shrink-0 flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-6 lg:w-1/3 lg:sticky lg:top-6">
+              <div className="text-xs uppercase tracking-[0.45em] text-white/50">Pattern Rush</div>
+              <h1 className="text-2xl font-semibold tracking-tight">Chaos Mode</h1>
+              <div className="flex flex-wrap items-center justify-between gap-3 text-xs uppercase tracking-[0.3em] text-white/50">
+                <span>Level {level.levelIndex}</span>
+                <span>
+                  Round {roundIndex + 1}/{level.rounds.length}
+                </span>
               </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-sky-400 to-fuchsia-400 transition-all"
+                  style={{ width: `${((roundIndex + 1) / level.rounds.length) * 100}%` }}
+                />
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.35em] text-white/50">{currentRound.label}</p>
+                <h2 className="mt-3 text-2xl font-semibold">{currentRound.intro}</h2>
+                <p className="mt-2 text-white/60">{currentRound.rule}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
+                <p className="text-xs uppercase tracking-[0.35em] text-white/50">Starting In</p>
+                <div className="mt-2 text-4xl font-semibold text-white/90">{introCount || 0}</div>
+              </div>
+              <div className="text-xs uppercase tracking-[0.3em] text-white/40">{adaptiveHint}</div>
+              <div className="text-[10px] uppercase tracking-[0.35em] text-white/30">
+                Accuracy {(gameState.accuracy * 100).toFixed(1)}%
+              </div>
+            </aside>
+
+            <div className="relative flex flex-1 items-center justify-center overflow-hidden p-4">
+              {flash && (
+                <div
+                  className={
+                    "pointer-events-none absolute inset-0 z-10 " +
+                    (flash === "success" ? "bg-emerald-400/20" : "bg-rose-500/20")
+                  }
+                />
+              )}
+
+              {phase === "intro" && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.96 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="w-full max-w-xl rounded-3xl border border-white/10 bg-white/5 p-6 text-center lg:hidden"
+                >
+                  <p className="text-xs uppercase tracking-[0.35em] text-white/50">{currentRound.label}</p>
+                  <h2 className="mt-4 text-2xl font-semibold">{currentRound.intro}</h2>
+                  <p className="mt-2 text-white/60">{currentRound.rule}</p>
+                  <div className="mt-6 text-5xl font-semibold text-white/80">{introCount || 0}</div>
+                </motion.div>
+              )}
+
+              {phase === "playing" && (
+                <RoundShell round={currentRound} roundIndex={roundIndex} totalRounds={level.rounds.length}>
+                  <RoundRenderer round={currentRound} onComplete={handleRoundComplete} />
+                </RoundShell>
+              )}
+
+              {phase === "levelComplete" && lastSessionStats && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.96 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="w-full max-w-xl rounded-3xl border border-white/10 bg-white/5 p-6 text-center"
+                >
+                  <p className="text-xs uppercase tracking-[0.35em] text-white/50">Level Complete</p>
+                  <h2 className="mt-4 text-2xl font-semibold">Level {profile.level - 1} cleared</h2>
+                  <p className="mt-2 text-white/60">
+                    Accuracy {(lastSessionStats.accuracy * 100).toFixed(1)}% · Avg reaction{" "}
+                    {(lastSessionStats.avgReaction / 1000).toFixed(2)}s
+                  </p>
+                  <div className="mt-6 text-lg uppercase tracking-[0.3em] text-white/70">
+                    Level {profile.level} starting…
+                  </div>
+                </motion.div>
+              )}
+
+              {phase === "failed" && lastSessionStats && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.96 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="w-full max-w-xl rounded-3xl border border-rose-400/30 bg-rose-500/10 p-6 text-center"
+                >
+                  <p className="text-xs uppercase tracking-[0.35em] text-rose-200">Game Over – You Failed</p>
+                  <h2 className="mt-4 text-2xl font-semibold">Level {level.levelIndex} stopped</h2>
+                  <p className="mt-2 text-white/70">
+                    Accuracy {(lastSessionStats.accuracy * 100).toFixed(1)}% · Avg reaction{" "}
+                    {(lastSessionStats.avgReaction / 1000).toFixed(2)}s
+                  </p>
+                  <p className="mt-4 text-sm text-white/60">
+                    Rounds cleared {lastSessionStats.successCount}/{lastSessionStats.successCount + lastSessionStats.failCount}
+                  </p>
+                </motion.div>
+              )}
             </div>
           </section>
         )}

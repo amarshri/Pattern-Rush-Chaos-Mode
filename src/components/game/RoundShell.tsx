@@ -20,7 +20,7 @@ export const RoundShell = ({
     animate={{ opacity: 1, y: 0 }}
     exit={{ opacity: 0, y: -20 }}
     transition={{ duration: 0.4 }}
-    className="w-full"
+    className="w-full max-w-[90vw] lg:max-w-full"
   >
     <div className="flex flex-wrap items-center justify-between gap-4 text-white/70">
       <div className="text-xs uppercase tracking-[0.35em]">

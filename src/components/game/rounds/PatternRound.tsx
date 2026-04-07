@@ -27,7 +27,7 @@ export const PatternRound = ({
 }) => {
   const rng = useMemo(() => mulberry32(round.seed), [round.seed]);
   const size = clamp(Math.round(3 + round.difficulty.score * 0.25), 3, 6);
-  const previewMs = Math.round(1200 + (1 - round.difficulty.speedFactor) * 1600);
+  const previewMs = Math.round(clamp(round.timeLimitMs * 0.6, 1200, 2600));
   const maxTiles = size * size - 2;
   const patternSize = clamp(Math.round(3 + round.difficulty.score * 0.9), 4, maxTiles);
 
@@ -112,7 +112,7 @@ export const PatternRound = ({
       </div>
       <div
         className={
-          "mt-4 grid gap-2 rounded-3xl bg-white/5 p-4 transition " +
+          "mt-4 grid w-full max-w-[90vw] max-h-[80vh] gap-2 rounded-3xl bg-white/5 p-4 transition lg:max-w-full " +
           (round.variation === "Fading" ? "animate-pulse" : "")
         }
         style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}
@@ -138,7 +138,7 @@ export const PatternRound = ({
       </div>
       <div className="mt-5 flex flex-wrap items-center justify-between gap-4">
         <p className="text-sm text-white/60">Tap tiles to match the pattern.</p>
-        <PrimaryButton onClick={handleSubmit} className="text-xs">
+        <PrimaryButton onClick={handleSubmit} className="text-sm sm:text-base">
           Lock In
         </PrimaryButton>
       </div>

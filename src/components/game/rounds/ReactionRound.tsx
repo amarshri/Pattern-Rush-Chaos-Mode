@@ -17,7 +17,7 @@ export const ReactionRound = ({
 }) => {
   const rng = useMemo(() => mulberry32(round.seed), [round.seed]);
   const size = clamp(Math.round(3 + round.difficulty.score * 0.18), 3, 5);
-  const windowMs = Math.round(1100 * round.difficulty.speedFactor + 250);
+  const windowMs = round.timeLimitMs;
   const totalTargets = round.targetCount;
 
   const [activeIndex, setActiveIndex] = useState(0);
@@ -107,7 +107,7 @@ export const ReactionRound = ({
         <span>Window {(windowMs / 1000).toFixed(1)}s</span>
       </div>
       <div
-        className="mt-5 grid gap-2 rounded-3xl bg-white/5 p-4"
+        className="mt-5 grid w-full max-w-[90vw] max-h-[80vh] gap-2 rounded-3xl bg-white/5 p-4 lg:max-w-full"
         style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}
       >
         {range(size * size).map((index) => {

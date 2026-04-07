@@ -17,7 +17,7 @@ export const SequenceRound = ({
 }) => {
   const rng = useMemo(() => mulberry32(round.seed), [round.seed]);
   const sequenceLength = clamp(Math.round(3 + round.difficulty.score * 0.5), 3, 7);
-  const showMs = Math.round(700 * round.difficulty.speedFactor + 250);
+  const showMs = Math.round(clamp(round.timeLimitMs * 0.45, 450, 1100));
 
   const fullSequence = useMemo(
     () => range(sequenceLength).map(() => SYMBOLS[Math.floor(rng() * SYMBOLS.length)]),
@@ -106,12 +106,12 @@ export const SequenceRound = ({
             <button
               key={symbol}
               onClick={() => handleTap(symbol)}
-              className="rounded-2xl border border-white/10 bg-white/10 py-3 text-sm font-semibold text-white hover:bg-white/20"
+              className="rounded-2xl border border-white/10 bg-white/10 py-4 text-base font-semibold text-white hover:bg-white/20"
             >
               {symbol}
             </button>
           ))}
-          <PrimaryButton onClick={handleReset} className="col-span-3 text-xs">
+          <PrimaryButton onClick={handleReset} className="col-span-3 text-sm sm:text-base">
             Reset
           </PrimaryButton>
         </div>
