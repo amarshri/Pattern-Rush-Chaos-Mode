@@ -107,7 +107,7 @@ export const ReactionRound = ({
         <span>Window {(windowMs / 1000).toFixed(1)}s</span>
       </div>
       <div
-        className="mt-5 grid w-full max-w-[90vw] max-h-[80vh] gap-2 rounded-3xl bg-white/5 p-4 lg:max-w-full"
+        className="mt-5 grid w-full max-w-[90vw] max-h-[80vh] gap-2 rounded-3xl bg-white/5 p-3 lg:max-h-full lg:max-w-full"
         style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}
       >
         {range(size * size).map((index) => {

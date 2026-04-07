@@ -169,6 +169,9 @@ export const GameApp = () => {
       const sessionStats = aggregateRoundStats(nextResults);
       setLastSessionStats(sessionStats);
       setPhase("failed");
+      const resetProfile = { ...profile, level: 1, lastSequence: [] };
+      setProfile(resetProfile);
+      syncProfile(resetProfile, sessionStats);
       if (transitionRef.current) clearTimeout(transitionRef.current);
       transitionRef.current = setTimeout(() => setScreen("home"), 2600);
       return;
@@ -204,7 +207,7 @@ export const GameApp = () => {
 
   const mainClass =
     screen === "playing"
-      ? "relative mx-auto flex h-screen w-full max-w-6xl flex-col overflow-hidden px-4 py-4 sm:px-6"
+      ? "relative mx-auto flex h-screen w-full max-w-6xl flex-col overflow-hidden px-3 py-3 sm:px-4"
       : "relative mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-8 px-5 pb-16 pt-10 sm:px-8";
 
   return (
@@ -299,8 +302,8 @@ export const GameApp = () => {
         )}
 
         {screen === "playing" && level && currentRound && (
-          <section className="flex h-screen flex-col overflow-hidden lg:flex-row">
-            <aside className="flex shrink-0 flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-6 lg:w-1/3 lg:sticky lg:top-6">
+          <section className="flex h-screen min-h-0 flex-col overflow-hidden lg:flex-row lg:gap-4">
+            <aside className="flex shrink-0 flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-5 lg:h-full lg:w-1/3 lg:max-h-full lg:sticky lg:top-3">
               <div className="text-xs uppercase tracking-[0.45em] text-white/50">Pattern Rush</div>
               <h1 className="text-2xl font-semibold tracking-tight">Chaos Mode</h1>
               <div className="flex flex-wrap items-center justify-between gap-3 text-xs uppercase tracking-[0.3em] text-white/50">
@@ -330,7 +333,7 @@ export const GameApp = () => {
               </div>
             </aside>
 
-            <div className="relative flex flex-1 items-center justify-center overflow-hidden p-4">
+            <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-3 lg:p-4">
               {flash && (
                 <div
                   className={
