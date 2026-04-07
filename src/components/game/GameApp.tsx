@@ -62,12 +62,12 @@ export const GameApp = () => {
   const [roundIndex, setRoundIndex] = useState(0);
   const [results, setResults] = useState<RoundResult[]>([]);
   const [screen, setScreen] = useState<"home" | "playing" | "results" | "stats" | "settings">("home");
-  const [phase, setPhase] = useState<"intro" | "playing" | "failed" | "levelComplete">("intro");
-  const [introCount, setIntroCount] = useState(0);
+  const [phase, setPhase] = useState<"intro" | "playing" | "result" | "failed">("intro");
+  const [introCount, setIntroCount] = useState(5);
   const [flash, setFlash] = useState<"success" | "fail" | null>(null);
   const [lastSessionStats, setLastSessionStats] = useState<ReturnType<typeof aggregateRoundStats> | null>(null);
   const [leaders, setLeaders] = useState<Array<{ user_id: string; high_score: number; brain_score: number }>>([]);
-  const transitionRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!isSupabaseEnabled || !supabase) return;
@@ -90,34 +90,33 @@ export const GameApp = () => {
 
   useEffect(
     () => () => {
-      if (transitionRef.current) clearTimeout(transitionRef.current);
+      if (timerRef.current) clearInterval(timerRef.current);
     },
     [],
   );
 
   const currentRound = level?.rounds[roundIndex];
 
-  const getIntroSeconds = (round: RoundConfig) => 5 + (round.seed % 4);
-
-  const triggerIntro = (round: RoundConfig) => {
-    setPhase("intro");
-    setIntroCount(getIntroSeconds(round));
+  const clearTimer = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = null;
   };
 
-  useEffect(() => {
-    if (phase !== "intro" || !currentRound) return;
-    const timer = setInterval(() => {
+  const startIntro = () => {
+    clearTimer();
+    setPhase("intro");
+    setIntroCount(5);
+    timerRef.current = setInterval(() => {
       setIntroCount((prev) => {
         if (prev <= 1) {
-          clearInterval(timer);
+          clearTimer();
           setPhase("playing");
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
-    return () => clearInterval(timer);
-  }, [phase, currentRound]);
+  };
 
   const startGame = () => {
     const nextLevel = createLevel(
@@ -130,8 +129,7 @@ export const GameApp = () => {
     setResults([]);
     setScreen("playing");
     setProfile((prev) => storeSequence(prev, roundSequence(nextLevel)));
-    setPhase("intro");
-    triggerIntro(nextLevel.rounds[0]);
+    startIntro();
   };
 
   const finishLevel = async (roundResults: RoundResult[]) => {
@@ -143,9 +141,10 @@ export const GameApp = () => {
     setProfile(updatedProfile);
     await syncProfile(updatedProfile, sessionStats);
     setLastSessionStats(sessionStats);
-    setPhase("levelComplete");
-    if (transitionRef.current) clearTimeout(transitionRef.current);
-    transitionRef.current = setTimeout(() => {
+    setPhase("result");
+    clearTimer();
+    timerRef.current = setInterval(() => {
+      clearTimer();
       const nextLevel = createLevel(
         updatedProfile.level,
         adaptive,
@@ -155,7 +154,7 @@ export const GameApp = () => {
       setRoundIndex(0);
       setResults([]);
       setProfile((prev) => storeSequence(prev, roundSequence(nextLevel)));
-      triggerIntro(nextLevel.rounds[0]);
+      startIntro();
     }, 2400);
   };
 
@@ -180,8 +179,14 @@ export const GameApp = () => {
       const resetProfile = { ...profile, level: 1, lastSequence: [] };
       setProfile(resetProfile);
       syncProfile(resetProfile, sessionStats);
-      if (transitionRef.current) clearTimeout(transitionRef.current);
-      transitionRef.current = setTimeout(() => setScreen("home"), 2600);
+      clearTimer();
+      timerRef.current = setInterval(() => {
+        clearTimer();
+        setScreen("home");
+        setLevel(null);
+        setResults([]);
+        setRoundIndex(0);
+      }, 2600);
       return;
     }
 
@@ -190,7 +195,7 @@ export const GameApp = () => {
     } else {
       const nextIndex = roundIndex + 1;
       setRoundIndex(nextIndex);
-      if (level) triggerIntro(level.rounds[nextIndex]);
+      startIntro();
     }
   };
 
@@ -215,7 +220,7 @@ export const GameApp = () => {
 
   const mainClass =
     screen === "playing"
-      ? "relative mx-auto flex h-screen w-full max-w-6xl flex-col overflow-hidden px-3 py-3 sm:px-4"
+      ? "relative mx-auto flex h-screen w-full max-w-6xl flex-col px-3 py-3 sm:px-4"
       : "relative mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-8 px-5 pb-16 pt-10 sm:px-8";
 
   if (!hydrated) {
@@ -227,7 +232,7 @@ export const GameApp = () => {
         </div>
         <main className="relative mx-auto flex min-h-screen w-full max-w-6xl items-center justify-center px-6">
           <div className="rounded-3xl border border-white/10 bg-white/5 px-6 py-4 text-sm uppercase tracking-[0.35em] text-white/60">
-            Loading…
+            Loading...
           </div>
         </main>
       </div>
@@ -326,8 +331,8 @@ export const GameApp = () => {
         )}
 
         {screen === "playing" && level && currentRound && (
-          <section className="flex h-screen min-h-0 flex-col overflow-hidden lg:flex-row lg:gap-4">
-            <aside className="flex shrink-0 flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-5 lg:h-full lg:w-1/3 lg:max-h-full lg:sticky lg:top-3">
+          <section className="flex h-screen min-h-0 flex-col overflow-y-auto lg:flex-row lg:gap-4 lg:overflow-hidden">
+            <aside className="flex shrink-0 flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-5 lg:h-full lg:w-[32%] lg:max-h-full lg:sticky lg:top-3">
               <div className="text-xs uppercase tracking-[0.45em] text-white/50">Pattern Rush</div>
               <h1 className="text-2xl font-semibold tracking-tight">Chaos Mode</h1>
               <div className="flex flex-wrap items-center justify-between gap-3 text-xs uppercase tracking-[0.3em] text-white/50">
@@ -347,17 +352,19 @@ export const GameApp = () => {
                 <h2 className="mt-3 text-2xl font-semibold">{currentRound.intro}</h2>
                 <p className="mt-2 text-white/60">{currentRound.rule}</p>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
-                <p className="text-xs uppercase tracking-[0.35em] text-white/50">Starting In</p>
-                <div className="mt-2 text-4xl font-semibold text-white/90">{introCount || 0}</div>
-              </div>
+              {phase === "intro" && (
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
+                  <p className="text-xs uppercase tracking-[0.35em] text-white/50">Starting In</p>
+                  <div className="mt-2 text-4xl font-semibold text-white/90">{introCount}</div>
+                </div>
+              )}
               <div className="text-xs uppercase tracking-[0.3em] text-white/40">{adaptiveHint}</div>
               <div className="text-[10px] uppercase tracking-[0.35em] text-white/30">
                 Accuracy {(gameState.accuracy * 100).toFixed(1)}%
               </div>
             </aside>
 
-            <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-3 lg:p-4">
+            <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-3 lg:w-[68%] lg:p-4">
               {flash && (
                 <div
                   className={
@@ -376,8 +383,18 @@ export const GameApp = () => {
                   <p className="text-xs uppercase tracking-[0.35em] text-white/50">{currentRound.label}</p>
                   <h2 className="mt-4 text-2xl font-semibold">{currentRound.intro}</h2>
                   <p className="mt-2 text-white/60">{currentRound.rule}</p>
-                  <div className="mt-6 text-5xl font-semibold text-white/80">{introCount || 0}</div>
+                  <div className="mt-6 text-5xl font-semibold text-white/80">{introCount}</div>
                 </motion.div>
+              )}
+
+              {phase === "intro" && (
+                <div className="hidden h-full w-full items-center justify-center lg:flex">
+                  <div className="w-full max-w-[min(70vh,55vw)] rounded-3xl border border-white/10 bg-white/5 p-6 text-center backdrop-blur-sm">
+                    <p className="text-xs uppercase tracking-[0.35em] text-white/40">Get Ready</p>
+                    <h3 className="mt-4 text-xl font-semibold text-white/80">Starting in {introCount}s</h3>
+                    <p className="mt-2 text-sm text-white/40">Game area locked</p>
+                  </div>
+                </div>
               )}
 
               {phase === "playing" && (
@@ -386,7 +403,7 @@ export const GameApp = () => {
                 </RoundShell>
               )}
 
-              {phase === "levelComplete" && lastSessionStats && (
+              {phase === "result" && lastSessionStats && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.96 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -399,7 +416,7 @@ export const GameApp = () => {
                     {(lastSessionStats.avgReaction / 1000).toFixed(2)}s
                   </p>
                   <div className="mt-6 text-lg uppercase tracking-[0.3em] text-white/70">
-                    Level {profile.level} starting…
+                    Level {profile.level} starting...
                   </div>
                 </motion.div>
               )}
@@ -410,7 +427,7 @@ export const GameApp = () => {
                   animate={{ opacity: 1, scale: 1 }}
                   className="w-full max-w-xl rounded-3xl border border-rose-400/30 bg-rose-500/10 p-6 text-center"
                 >
-                  <p className="text-xs uppercase tracking-[0.35em] text-rose-200">Game Over – You Failed</p>
+                  <p className="text-xs uppercase tracking-[0.35em] text-rose-200">Game Over - You Failed</p>
                   <h2 className="mt-4 text-2xl font-semibold">Level {level.levelIndex} stopped</h2>
                   <p className="mt-2 text-white/70">
                     Accuracy {(lastSessionStats.accuracy * 100).toFixed(1)}% · Avg reaction{" "}

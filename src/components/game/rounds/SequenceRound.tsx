@@ -53,30 +53,37 @@ export const SequenceRound = ({
   const handleTap = useCallback(
     (symbol: string) => {
       if (phase !== "input") return;
+      if (completedRef.current) return;
       const next = [...input, symbol];
       setInput(next);
-      if (next.length >= targetSequence.length) {
-        if (completedRef.current) return;
-        completedRef.current = true;
-        const reaction = performance.now() - startRef.current;
-        const correct = targetSequence.filter((value, idx) => value === next[idx]).length;
-        const accuracy = correct / targetSequence.length;
-        const score = Math.round(accuracy * 130 + clamp(1 - reaction / (round.timeLimitMs + 600), 0, 1) * 40);
-        onComplete({
-          id: round.id,
-          type: round.type,
-          score,
-          accuracy,
-          reactionMs: reaction / targetSequence.length,
-          success: accuracy > 0.7,
-          notes: [round.variation],
-        });
-      }
     },
-    [input, onComplete, phase, round, targetSequence],
+    [input, phase],
   );
 
-  const handleReset = () => setInput([]);
+  const handleSubmit = useCallback(() => {
+    if (phase !== "input") return;
+    if (completedRef.current) return;
+    completedRef.current = true;
+    const reaction = performance.now() - startRef.current;
+    const trimmed = input.slice(0, targetSequence.length);
+    const correct = targetSequence.filter((value, idx) => value === trimmed[idx]).length;
+    const accuracy = correct / targetSequence.length;
+    const score = Math.round(accuracy * 130 + clamp(1 - reaction / (round.timeLimitMs + 600), 0, 1) * 40);
+    onComplete({
+      id: round.id,
+      type: round.type,
+      score,
+      accuracy,
+      reactionMs: reaction / targetSequence.length,
+      success: accuracy > 0.7,
+      notes: [round.variation],
+    });
+  }, [input, onComplete, phase, round, targetSequence]);
+
+  const handleReset = () => {
+    if (completedRef.current) return;
+    setInput([]);
+  };
 
   return (
     <div>
@@ -106,14 +113,20 @@ export const SequenceRound = ({
             <button
               key={symbol}
               onClick={() => handleTap(symbol)}
-              className="rounded-2xl border border-white/10 bg-white/10 py-4 text-base font-semibold text-white hover:bg-white/20"
+              disabled={completedRef.current}
+              className="rounded-2xl border border-white/10 bg-white/10 py-4 text-base font-semibold text-white hover:bg-white/20 disabled:opacity-40"
             >
               {symbol}
             </button>
           ))}
-          <PrimaryButton onClick={handleReset} className="col-span-3 text-sm sm:text-base">
-            Reset
-          </PrimaryButton>
+          <div className="col-span-3 grid grid-cols-2 gap-2">
+            <PrimaryButton onClick={handleReset} className="text-sm sm:text-base">
+              Clear
+            </PrimaryButton>
+            <PrimaryButton onClick={handleSubmit} className="text-sm sm:text-base">
+              Lock In
+            </PrimaryButton>
+          </div>
         </div>
       )}
     </div>
