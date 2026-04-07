@@ -1,10 +1,9 @@
 export const playTone = (frequency: number, duration = 0.12, volume = 0.18) => {
   if (typeof window === "undefined") return;
-  const AudioContext =
-    window.AudioContext ||
-    (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!AudioContext) return;
-  const context = new AudioContext();
+  type WebkitWindow = Window & { webkitAudioContext?: typeof window.AudioContext };
+  const AudioContextCtor = window.AudioContext || (window as WebkitWindow).webkitAudioContext;
+  if (!AudioContextCtor) return;
+  const context = new AudioContextCtor();
   const oscillator = context.createOscillator();
   const gain = context.createGain();
 
