@@ -112,7 +112,8 @@ export const PatternRound = ({
       </div>
       <div
         className={
-          "mt-4 grid w-full max-w-[90vw] max-h-[80vh] gap-2 rounded-3xl bg-white/5 p-3 transition lg:max-h-full lg:max-w-full " +
+          "mt-4 grid w-full max-w-[90vw] max-h-[70vh] gap-2 rounded-3xl bg-white/5 p-3 transition " +
+          "lg:max-w-[min(70vh,55vw)] lg:max-h-[70vh] " +
           (round.variation === "Fading" ? "animate-pulse" : "")
         }
         style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}

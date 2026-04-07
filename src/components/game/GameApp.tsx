@@ -56,6 +56,7 @@ const RoundRenderer = ({
 
 export const GameApp = () => {
   const [profile, setProfile] = useState(() => loadProfile());
+  const [hydrated, setHydrated] = useState(false);
   const [adaptive, setAdaptive] = useState<AdaptiveState>(createAdaptiveState());
   const [level, setLevel] = useState<LevelConfig | null>(null);
   const [roundIndex, setRoundIndex] = useState(0);
@@ -78,6 +79,13 @@ export const GameApp = () => {
       .then(({ data }) => {
         if (data) setLeaders(data);
       });
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setProfile(loadProfile());
+    setHydrated(true);
   }, []);
 
   useEffect(
@@ -209,6 +217,22 @@ export const GameApp = () => {
     screen === "playing"
       ? "relative mx-auto flex h-screen w-full max-w-6xl flex-col overflow-hidden px-3 py-3 sm:px-4"
       : "relative mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-8 px-5 pb-16 pt-10 sm:px-8";
+
+  if (!hydrated) {
+    return (
+      <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#1d1f33_0%,_#0b0d16_45%,_#07080d_100%)] text-white">
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute -left-40 top-10 h-80 w-80 rounded-full bg-cyan-500/10 blur-[120px]" />
+          <div className="absolute right-0 top-0 h-72 w-72 rounded-full bg-fuchsia-500/10 blur-[120px]" />
+        </div>
+        <main className="relative mx-auto flex min-h-screen w-full max-w-6xl items-center justify-center px-6">
+          <div className="rounded-3xl border border-white/10 bg-white/5 px-6 py-4 text-sm uppercase tracking-[0.35em] text-white/60">
+            Loading…
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#1d1f33_0%,_#0b0d16_45%,_#07080d_100%)] text-white">

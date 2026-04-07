@@ -20,7 +20,7 @@ export const RoundShell = ({
     animate={{ opacity: 1, y: 0 }}
     exit={{ opacity: 0, y: -20 }}
     transition={{ duration: 0.4 }}
-    className="w-full max-w-[90vw] lg:max-w-full lg:max-h-full"
+    className="w-full max-w-[90vw] lg:max-w-[min(70vh,55vw)] lg:max-h-full"
   >
     <div className="flex flex-wrap items-center justify-between gap-4 text-white/70">
       <div className="text-xs uppercase tracking-[0.35em]">
@@ -29,7 +29,7 @@ export const RoundShell = ({
       <div className="text-xs uppercase tracking-[0.35em]">{round.label}</div>
       <div className="text-xs uppercase tracking-[0.35em]">{round.variation}</div>
     </div>
-    <div className="mt-4 rounded-3xl border border-white/10 bg-white/5 p-5 shadow-2xl">
+    <div className="mt-4 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-2xl lg:p-5">
       <div className="text-sm uppercase tracking-[0.3em] text-white/60">Rule</div>
       <p className="mt-2 text-lg font-semibold text-white">{round.rule}</p>
       <div className="mt-6">{children}</div>
