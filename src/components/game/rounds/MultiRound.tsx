@@ -87,13 +87,7 @@ export const MultiRound = ({
 
   return (
     <div>
-      <div className="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-white/50">
-        <span>Memory Set</span>
-        <span>
-          {index + 1}/{prompts.length}
-        </span>
-      </div>
-      <div className="mt-4 rounded-2xl bg-white/5 p-4">
+      <div className="rounded-2xl bg-white/5 p-4">
         <div className="flex flex-wrap gap-2">
           {memorySet.map((symbol) => (
             <span key={symbol} className="rounded-full bg-white/15 px-3 py-2 text-xs font-semibold text-white">

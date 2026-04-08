@@ -100,14 +100,8 @@ export const ReactionRound = ({
 
   return (
     <div>
-      <div className="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-white/50">
-        <span>
-          Hits {hitCount}/{totalTargets}
-        </span>
-        <span>Window {(windowMs / 1000).toFixed(1)}s</span>
-      </div>
       <div
-        className="mt-5 grid w-full max-w-[90vw] max-h-[70vh] gap-2 rounded-3xl bg-white/5 p-3 lg:max-w-[min(70vh,55vw)] lg:max-h-[70vh]"
+        className="grid w-full max-w-[90vw] max-h-[70vh] gap-2 rounded-3xl bg-white/5 p-3 lg:max-w-[min(70vh,55vw)] lg:max-h-[70vh]"
         style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}
       >
         {range(size * size).map((index) => {
@@ -131,7 +125,6 @@ export const ReactionRound = ({
           );
         })}
       </div>
-      <p className="mt-4 text-sm text-white/60">Tap only the {TARGET_SYMBOL} symbol.</p>
     </div>
   );
 };

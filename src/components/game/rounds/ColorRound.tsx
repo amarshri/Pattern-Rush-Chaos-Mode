@@ -35,7 +35,6 @@ export const ColorRound = ({
   );
 
   const [index, setIndex] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(timePerPrompt);
   const [correctCount, setCorrectCount] = useState(0);
   const [reactionTotal, setReactionTotal] = useState(0);
   const promptStart = useRef<number>(0);
@@ -89,7 +88,6 @@ export const ColorRound = ({
     const end = performance.now() + timePerPrompt;
     const timer = setInterval(() => {
       const remaining = end - performance.now();
-      setTimeLeft(Math.max(0, Math.round(remaining)));
       if (remaining <= 0) {
         clearInterval(timer);
         handleAnswer("TIMEOUT");
@@ -102,16 +100,9 @@ export const ColorRound = ({
 
   return (
     <div>
-      <div className="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-white/50">
-        <span>
-          Prompt {index + 1}/{prompts.length}
-        </span>
-        <span>{(timeLeft / 1000).toFixed(1)}s</span>
-      </div>
-      <div className="mt-6 rounded-2xl bg-white/5 p-6 text-center">
-        <p className="text-xs uppercase tracking-[0.3em] text-white/60">Rule: {currentRule}</p>
+      <div className="rounded-2xl bg-white/5 p-6 text-center">
         <div
-          className="mt-4 text-4xl font-bold tracking-[0.2em]"
+          className="text-4xl font-bold tracking-[0.2em]"
           style={{ color: prompt?.color.value }}
         >
           {prompt?.word.name}

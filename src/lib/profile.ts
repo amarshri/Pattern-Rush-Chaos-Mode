@@ -8,6 +8,7 @@ export type PlayerSettings = {
 };
 
 export type PlayerProfile = PlayerStats & {
+  name: string;
   settings: PlayerSettings;
   lastSequence: string[];
   updatedAt: string;
@@ -22,6 +23,7 @@ const defaultProfile: PlayerProfile = {
   totalGames: 0,
   avgAccuracy: 0,
   avgReaction: 0,
+  name: "Player",
   settings: {
     sound: true,
     haptics: true,
@@ -95,31 +97,16 @@ export const storeSequence = (profile: PlayerProfile, sequence: string[]) => {
   return updated;
 };
 
-export const syncProfile = async (profile: PlayerProfile, session?: SessionStats) => {
+export const syncProfile = async (profile: PlayerProfile) => {
   if (!isSupabaseEnabled || !supabase) return;
   try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
-
-    await supabase
-      .from("profiles")
-      .upsert({
-        user_id: user.id,
-        level: profile.level,
+    await supabase.from("leaderboard").upsert(
+      {
+        name: profile.name,
         high_score: profile.highScore,
-        brain_score: profile.brainScore,
-      });
-
-    if (session) {
-      await supabase.from("game_stats").insert({
-        user_id: user.id,
-        accuracy: session.accuracy,
-        avg_reaction: session.avgReaction,
-        total_games: profile.totalGames,
-      });
-    }
+      },
+      { onConflict: "name" },
+    );
   } catch (error) {
     console.error("Supabase sync failed", error);
   }

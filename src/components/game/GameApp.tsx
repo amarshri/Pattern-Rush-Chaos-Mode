@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createAdaptiveState, updateAdaptiveState } from "@/lib/game/adaptive";
 import { createLevel, roundSequence } from "@/lib/game/engine";
 import type {
@@ -15,9 +15,9 @@ import {
   aggregateRoundStats,
   applySessionStats,
   loadProfile,
+  saveProfile,
   storeSequence,
   syncProfile,
-  updateSettings,
 } from "@/lib/profile";
 import { hapticPulse, playTone } from "@/lib/feedback";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
@@ -27,8 +27,6 @@ import { ColorRound } from "@/components/game/rounds/ColorRound";
 import { SequenceRound } from "@/components/game/rounds/SequenceRound";
 import { ReactionRound } from "@/components/game/rounds/ReactionRound";
 import { MultiRound } from "@/components/game/rounds/MultiRound";
-import { StatsPanel } from "@/components/game/StatsPanel";
-import { SettingsPanel } from "@/components/game/SettingsPanel";
 import { isSupabaseEnabled, supabase } from "@/lib/supabase/client";
 
 const RoundRenderer = ({
@@ -64,16 +62,17 @@ export const GameApp = () => {
   const [screen, setScreen] = useState<"home" | "playing" | "results" | "stats" | "settings">("home");
   const [phase, setPhase] = useState<"intro" | "playing" | "result" | "failed">("intro");
   const [introCount, setIntroCount] = useState(5);
+  const [playTimeLeft, setPlayTimeLeft] = useState<number | null>(null);
   const [flash, setFlash] = useState<"success" | "fail" | null>(null);
   const [lastSessionStats, setLastSessionStats] = useState<ReturnType<typeof aggregateRoundStats> | null>(null);
-  const [leaders, setLeaders] = useState<Array<{ user_id: string; high_score: number; brain_score: number }>>([]);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [leaders, setLeaders] = useState<Array<{ name: string; high_score: number }>>([]);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!isSupabaseEnabled || !supabase) return;
     supabase
-      .from("profiles")
-      .select("user_id, high_score, brain_score")
+      .from("leaderboard")
+      .select("name, high_score")
       .order("high_score", { ascending: false })
       .limit(5)
       .then(({ data }) => {
@@ -90,7 +89,7 @@ export const GameApp = () => {
 
   useEffect(
     () => () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) clearTimeout(timerRef.current);
     },
     [],
   );
@@ -98,19 +97,36 @@ export const GameApp = () => {
   const currentRound = level?.rounds[roundIndex];
 
   const clearTimer = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
+    if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = null;
   };
 
-  const startIntro = () => {
+  const startPlayTimer = (durationMs: number) => {
+    clearTimer();
+    setPlayTimeLeft(durationMs);
+    const end = performance.now() + durationMs;
+    timerRef.current = setInterval(() => {
+      const remaining = end - performance.now();
+      if (remaining <= 0) {
+        clearTimer();
+        setPlayTimeLeft(0);
+        return;
+      }
+      setPlayTimeLeft(remaining);
+    }, 120);
+  };
+
+  const startIntro = (playMs: number) => {
     clearTimer();
     setPhase("intro");
     setIntroCount(5);
+    setPlayTimeLeft(null);
     timerRef.current = setInterval(() => {
       setIntroCount((prev) => {
         if (prev <= 1) {
           clearTimer();
           setPhase("playing");
+          startPlayTimer(playMs);
           return 0;
         }
         return prev - 1;
@@ -119,6 +135,12 @@ export const GameApp = () => {
   };
 
   const startGame = () => {
+    const cleanName = profile.name.trim() || "Player";
+    if (cleanName !== profile.name) {
+      const updated = { ...profile, name: cleanName };
+      setProfile(updated);
+      saveProfile(updated);
+    }
     const nextLevel = createLevel(
       profile.level,
       adaptive,
@@ -129,7 +151,7 @@ export const GameApp = () => {
     setResults([]);
     setScreen("playing");
     setProfile((prev) => storeSequence(prev, roundSequence(nextLevel)));
-    startIntro();
+    startIntro(nextLevel.rounds[0].timeLimitMs);
   };
 
   const finishLevel = async (roundResults: RoundResult[]) => {
@@ -139,10 +161,11 @@ export const GameApp = () => {
       level: profile.level + 1,
     };
     setProfile(updatedProfile);
-    await syncProfile(updatedProfile, sessionStats);
+    await syncProfile(updatedProfile);
     setLastSessionStats(sessionStats);
     setPhase("result");
     clearTimer();
+    setPlayTimeLeft(null);
     timerRef.current = setInterval(() => {
       clearTimer();
       const nextLevel = createLevel(
@@ -154,7 +177,7 @@ export const GameApp = () => {
       setRoundIndex(0);
       setResults([]);
       setProfile((prev) => storeSequence(prev, roundSequence(nextLevel)));
-      startIntro();
+      startIntro(nextLevel.rounds[0].timeLimitMs);
     }, 2400);
   };
 
@@ -164,6 +187,8 @@ export const GameApp = () => {
     setAdaptive((prev) => updateAdaptiveState(prev, result));
     setFlash(result.success ? "success" : "fail");
     setTimeout(() => setFlash(null), 200);
+    clearTimer();
+    setPlayTimeLeft(null);
 
     if (profile.settings.sound) {
       playTone(result.success ? 540 : 220, 0.14, 0.2);
@@ -178,7 +203,7 @@ export const GameApp = () => {
       setPhase("failed");
       const resetProfile = { ...profile, level: 1, lastSequence: [] };
       setProfile(resetProfile);
-      syncProfile(resetProfile, sessionStats);
+      syncProfile(resetProfile);
       clearTimer();
       timerRef.current = setInterval(() => {
         clearTimer();
@@ -195,33 +220,22 @@ export const GameApp = () => {
     } else {
       const nextIndex = roundIndex + 1;
       setRoundIndex(nextIndex);
-      startIntro();
+      startIntro(level.rounds[nextIndex].timeLimitMs);
     }
   };
 
-  const sessionStats = useMemo(() => (results.length ? aggregateRoundStats(results) : null), [results]);
-  const gameState = useMemo(
-    () => ({
-      level: level?.levelIndex ?? profile.level,
-      roundIndex,
-      phase,
-      timer: introCount,
-      accuracy: sessionStats?.accuracy ?? 0,
-    }),
-    [introCount, level?.levelIndex, phase, profile.level, roundIndex, sessionStats?.accuracy],
-  );
-
-  const adaptiveHint = useMemo(() => {
-    const score = adaptive.skill;
-    if (score > 0.45) return "Dialing up the chaos.";
-    if (score < -0.35) return "Easing pressure for a cleaner run.";
-    return "Holding steady difficulty.";
-  }, [adaptive.skill]);
 
   const mainClass =
     screen === "playing"
       ? "relative mx-auto flex h-screen w-full max-w-6xl flex-col px-3 py-3 sm:px-4"
       : "relative mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-8 px-5 pb-16 pt-10 sm:px-8";
+
+  const displayTimer =
+    phase === "intro"
+      ? introCount
+      : playTimeLeft !== null
+        ? Math.max(0, Math.ceil(playTimeLeft / 1000))
+        : null;
 
   if (!hydrated) {
     return (
@@ -252,71 +266,50 @@ export const GameApp = () => {
               <p className="text-xs uppercase tracking-[0.45em] text-white/50">Pattern Rush</p>
               <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Chaos Mode</h1>
             </div>
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={() => setScreen("stats")}
-                className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/70 hover:bg-white/10"
-              >
-                Stats
-              </button>
-              <button
-                onClick={() => setScreen("settings")}
-                className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/70 hover:bg-white/10"
-              >
-                Settings
-              </button>
-            </div>
           </header>
         )}
 
         {screen === "home" && (
-          <section className="grid gap-6 lg:grid-cols-[1.3fr_1fr]">
-            <div className="rounded-[32px] border border-white/10 bg-white/5 p-8 shadow-2xl">
-              <p className="text-xs uppercase tracking-[0.35em] text-white/50">Adaptive Cognitive Runner</p>
-              <h2 className="mt-4 text-2xl font-semibold sm:text-3xl">
-                Procedural rounds. No repeats. Just your brain vs the clock.
-              </h2>
-              <p className="mt-4 text-white/60">
-                Levels chain together 4-6 rounds, ending in a high-pressure finale. Your performance tweaks the
-                difficulty, ensuring every run feels fair and fresh.
-              </p>
-              <div className="mt-6 flex flex-wrap gap-4">
-                <PrimaryButton onClick={startGame}>Start Game</PrimaryButton>
-                <button
-                  onClick={() => setScreen("stats")}
-                  className="rounded-full border border-white/15 px-5 py-3 text-xs uppercase tracking-[0.2em] text-white/70 hover:bg-white/10"
-                >
-                  View Stats
-                </button>
+          <section className="mx-auto w-full max-w-lg">
+            <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 shadow-2xl">
+              <h2 className="text-2xl font-semibold">Start Run</h2>
+              <p className="mt-2 text-sm text-white/60">Enter your name and chase the top score.</p>
+
+              <div className="mt-5">
+                <label className="text-xs uppercase tracking-[0.35em] text-white/50">Player Name</label>
+                <input
+                  value={profile.name}
+                  onChange={(event) => {
+                    const updated = { ...profile, name: event.target.value.slice(0, 18) };
+                    setProfile(updated);
+                    saveProfile(updated);
+                  }}
+                  className="mt-2 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-base text-white focus:outline-none focus:ring-2 focus:ring-white/30"
+                  placeholder="Player"
+                />
               </div>
-              <div className="mt-8 flex flex-wrap gap-3 text-xs uppercase tracking-[0.3em] text-white/40">
-                <span>Level {profile.level}</span>
-                <span>High Score {profile.highScore}</span>
-                <span>Brain Score {profile.brainScore}</span>
+
+              <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
+                <p className="text-xs uppercase tracking-[0.35em] text-white/50">High Score</p>
+                <div className="mt-2 text-3xl font-semibold">{profile.highScore}</div>
               </div>
-            </div>
-            <div className="rounded-[32px] border border-white/10 bg-white/5 p-6">
-              <h3 className="text-lg font-semibold uppercase tracking-[0.25em] text-white/70">Round Deck</h3>
-              <ul className="mt-4 space-y-3 text-sm text-white/60">
-                <li>Pattern Recall</li>
-                <li>Color Confusion</li>
-                <li>Sequence Memory</li>
-                <li>Reaction Trap</li>
-                <li>Multi-Task Surge</li>
-              </ul>
-              <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 text-xs uppercase tracking-[0.3em] text-white/50">
-                {adaptiveHint}
+
+              <div className="mt-6">
+                <PrimaryButton onClick={startGame} className="w-full">
+                  Start Game
+                </PrimaryButton>
               </div>
-              <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 text-xs text-white/60">
-                <p className="uppercase tracking-[0.3em] text-white/50">Leaderboard</p>
+
+              <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs uppercase tracking-[0.35em] text-white/50">Leaderboard</p>
                 {isSupabaseEnabled ? (
                   <div className="mt-3 space-y-2 text-sm">
                     {leaders.length === 0 && <p className="text-white/40">No scores yet.</p>}
                     {leaders.map((entry, idx) => (
-                      <div key={entry.user_id} className="flex items-center justify-between">
+                      <div key={entry.name} className="flex items-center justify-between text-white/80">
                         <span className="text-white/50">#{idx + 1}</span>
-                        <span className="text-white/80">{entry.high_score}</span>
-                        <span className="text-white/40">{entry.brain_score} BS</span>
+                        <span className="flex-1 px-3 truncate">{entry.name}</span>
+                        <span>{entry.high_score}</span>
                       </div>
                     ))}
                   </div>
@@ -333,34 +326,13 @@ export const GameApp = () => {
         {screen === "playing" && level && currentRound && (
           <section className="flex h-screen min-h-0 flex-col overflow-y-auto lg:flex-row lg:gap-4 lg:overflow-hidden">
             <aside className="flex shrink-0 flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-5 lg:h-full lg:w-[32%] lg:max-h-full lg:sticky lg:top-3">
-              <div className="text-xs uppercase tracking-[0.45em] text-white/50">Pattern Rush</div>
-              <h1 className="text-2xl font-semibold tracking-tight">Chaos Mode</h1>
-              <div className="flex flex-wrap items-center justify-between gap-3 text-xs uppercase tracking-[0.3em] text-white/50">
+              <div className="flex items-center justify-between text-xs uppercase tracking-[0.35em] text-white/50">
                 <span>Level {level.levelIndex}</span>
-                <span>
-                  Round {roundIndex + 1}/{level.rounds.length}
-                </span>
+                {(phase === "intro" || phase === "playing") && <span>Timer {displayTimer ?? "--"}s</span>}
               </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-sky-400 to-fuchsia-400 transition-all"
-                  style={{ width: `${((roundIndex + 1) / level.rounds.length) * 100}%` }}
-                />
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-[0.35em] text-white/50">{currentRound.label}</p>
-                <h2 className="mt-3 text-2xl font-semibold">{currentRound.intro}</h2>
-                <p className="mt-2 text-white/60">{currentRound.rule}</p>
-              </div>
-              {phase === "intro" && (
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
-                  <p className="text-xs uppercase tracking-[0.35em] text-white/50">Starting In</p>
-                  <div className="mt-2 text-4xl font-semibold text-white/90">{introCount}</div>
-                </div>
-              )}
-              <div className="text-xs uppercase tracking-[0.3em] text-white/40">{adaptiveHint}</div>
-              <div className="text-[10px] uppercase tracking-[0.35em] text-white/30">
-                Accuracy {(gameState.accuracy * 100).toFixed(1)}%
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs uppercase tracking-[0.35em] text-white/50">Question</p>
+                <h2 className="mt-4 text-2xl font-semibold">{currentRound.rule}</h2>
               </div>
             </aside>
 
@@ -398,7 +370,7 @@ export const GameApp = () => {
               )}
 
               {phase === "playing" && (
-                <RoundShell round={currentRound} roundIndex={roundIndex} totalRounds={level.rounds.length}>
+                <RoundShell key={currentRound.id}>
                   <RoundRenderer round={currentRound} onComplete={handleRoundComplete} />
                 </RoundShell>
               )}
@@ -442,44 +414,6 @@ export const GameApp = () => {
           </section>
         )}
 
-        {screen === "stats" && (
-          <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-            <StatsPanel profile={profile} />
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-white/60">
-              <h3 className="text-lg font-semibold uppercase tracking-[0.25em] text-white/70">Session Pulse</h3>
-              <p className="mt-4">
-                {sessionStats
-                  ? `Last run score ${sessionStats.score}, accuracy ${(sessionStats.accuracy * 100).toFixed(1)}%.`
-                  : "Play a level to generate a session pulse."}
-              </p>
-              <div className="mt-6">
-                <PrimaryButton onClick={() => setScreen("home")} className="text-xs">
-                  Back Home
-                </PrimaryButton>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {screen === "settings" && (
-          <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-            <SettingsPanel
-              settings={profile.settings}
-              onChange={(next) => setProfile((prev) => updateSettings(prev, next))}
-            />
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-white/60">
-              <h3 className="text-lg font-semibold uppercase tracking-[0.25em] text-white/70">Accessibility</h3>
-              <p className="mt-4">
-                Haptics and sound make feedback clearer on mobile. Toggle them anytime. Settings save locally.
-              </p>
-              <div className="mt-6">
-                <PrimaryButton onClick={() => setScreen("home")} className="text-xs">
-                  Back Home
-                </PrimaryButton>
-              </div>
-            </div>
-          </section>
-        )}
       </main>
     </div>
   );

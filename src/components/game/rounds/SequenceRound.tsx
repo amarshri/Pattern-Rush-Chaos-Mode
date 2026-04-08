@@ -87,10 +87,6 @@ export const SequenceRound = ({
 
   return (
     <div>
-      <div className="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-white/50">
-        <span>{phase === "show" ? "Memorize" : "Repeat"}</span>
-        <span>{round.variation}</span>
-      </div>
       <div className="mt-6 rounded-2xl bg-white/5 p-6 text-center">
         {phase === "show" ? (
           <div className="text-3xl font-semibold tracking-[0.2em] text-white">

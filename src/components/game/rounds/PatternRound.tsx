@@ -42,7 +42,6 @@ export const PatternRound = ({
 
   const [phase, setPhase] = useState<"preview" | "input">("preview");
   const [selected, setSelected] = useState<Set<number>>(new Set());
-  const [timeLeft, setTimeLeft] = useState(round.timeLimitMs);
   const inputStart = useRef<number | null>(null);
   const submittedRef = useRef(false);
 
@@ -57,7 +56,6 @@ export const PatternRound = ({
     const end = performance.now() + round.timeLimitMs;
     const interval = setInterval(() => {
       const remaining = end - performance.now();
-      setTimeLeft(Math.max(0, Math.round(remaining)));
       if (remaining <= 0) {
         clearInterval(interval);
         handleSubmit();
@@ -106,13 +104,9 @@ export const PatternRound = ({
 
   return (
     <div>
-      <div className="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-white/50">
-        <span>{phase === "preview" ? "Preview" : "Rebuild"}</span>
-        <span>{(timeLeft / 1000).toFixed(1)}s</span>
-      </div>
       <div
         className={
-          "mt-4 grid w-full max-w-[90vw] max-h-[70vh] gap-2 rounded-3xl bg-white/5 p-3 transition " +
+          "grid w-full max-w-[90vw] max-h-[70vh] gap-2 rounded-3xl bg-white/5 p-3 transition " +
           "lg:max-w-[min(70vh,55vw)] lg:max-h-[70vh] " +
           (round.variation === "Fading" ? "animate-pulse" : "")
         }
@@ -137,8 +131,7 @@ export const PatternRound = ({
           );
         })}
       </div>
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-4">
-        <p className="text-sm text-white/60">Tap tiles to match the pattern.</p>
+      <div className="mt-5 flex justify-end">
         <PrimaryButton onClick={handleSubmit} className="text-sm sm:text-base">
           Lock In
         </PrimaryButton>
