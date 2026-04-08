@@ -39,6 +39,7 @@ export const ColorRound = ({
   const [reactionTotal, setReactionTotal] = useState(0);
   const promptStart = useRef<number>(0);
   const completedRef = useRef(false);
+  const [ruleFlash, setRuleFlash] = useState(false);
 
   const currentRule =
     round.variation === "Color Rule"
@@ -48,6 +49,14 @@ export const ColorRound = ({
         : index >= switchIndex && switchIndex >= 0
           ? "COLOR"
           : "TEXT";
+
+  useEffect(() => {
+    if (round.variation !== "Switch Rule") return;
+    if (index !== switchIndex) return;
+    setRuleFlash(true);
+    const timer = setTimeout(() => setRuleFlash(false), 600);
+    return () => clearTimeout(timer);
+  }, [index, round.variation, switchIndex]);
 
   const handleAnswer = useCallback(
     (answer: string) => {
@@ -99,9 +108,17 @@ export const ColorRound = ({
 
   return (
     <div>
-      <div className="rounded-2xl bg-white/5 p-6 text-center">
+      <div
+        className={
+          "rounded-2xl bg-white/5 p-6 text-center transition " +
+          (ruleFlash ? "ring-2 ring-amber-300/60" : "")
+        }
+      >
+        <p className="text-xs uppercase tracking-[0.3em] text-white/60">
+          Rule: {currentRule === "COLOR" ? "Pick the COLOR" : "Pick the WORD"}
+        </p>
         <div
-          className="text-4xl font-bold tracking-[0.2em]"
+          className="mt-4 text-4xl font-bold tracking-[0.2em]"
           style={{ color: prompt?.color.value }}
         >
           {prompt?.word.name}

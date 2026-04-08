@@ -100,6 +100,15 @@ export const storeSequence = (profile: PlayerProfile, sequence: string[]) => {
 export const syncProfile = async (profile: PlayerProfile) => {
   if (!isSupabaseEnabled || !supabase) return;
   try {
+    const { data: existing } = await supabase
+      .from("leaderboard")
+      .select("high_score")
+      .eq("name", profile.name)
+      .maybeSingle();
+
+    const currentHigh = existing?.high_score ?? 0;
+    if (profile.highScore <= currentHigh) return;
+
     await supabase.from("leaderboard").upsert(
       {
         name: profile.name,

@@ -238,6 +238,15 @@ export const GameApp = () => {
         ? Math.max(0, Math.ceil(playTimeLeft / 1000))
         : null;
 
+  useEffect(() => {
+    if (!profile.settings.haptics) return;
+    if (phase !== "playing") return;
+    if (displayTimer === null) return;
+    if (displayTimer <= 3 && displayTimer > 0) {
+      hapticPulse(20);
+    }
+  }, [displayTimer, phase, profile.settings.haptics]);
+
   if (!hydrated) {
     return (
       <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#1d1f33_0%,_#0b0d16_45%,_#07080d_100%)] text-white">
@@ -308,7 +317,7 @@ export const GameApp = () => {
                     {leaders.length === 0 && <p className="text-white/40">No scores yet.</p>}
                     {leaders.map((entry, idx) => (
                       <div key={entry.name} className="flex items-center justify-between text-white/80">
-                        <span className="text-white/50">#{idx + 1}</span>
+                        <span className="text-white/50">{idx + 1}</span>
                         <span className="flex-1 px-3 truncate">{entry.name}</span>
                         <span>{entry.high_score}</span>
                       </div>

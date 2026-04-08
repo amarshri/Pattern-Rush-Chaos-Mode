@@ -54,10 +54,10 @@ const makeDifficulty = (
   total: number,
 ): DifficultySnapshot => {
   const stage = slot / Math.max(1, total - 1);
-  const base = 1 + levelIndex * 0.55 + stage * 2.1;
+  const base = 1 + levelIndex * 0.75 + stage * 2.4;
   const score = clamp(base + adaptive.skill * 1.8, 1, 10);
-  const speedFactor = clamp(1 - score * 0.055, 0.35, 1);
-  const complexity = clamp(0.45 + score * 0.08 + stage * 0.2, 0.45, 1.25);
+  const speedFactor = clamp(1 - score * 0.07, 0.3, 1);
+  const complexity = clamp(0.5 + score * 0.1 + stage * 0.25, 0.5, 1.35);
   return { level: levelIndex, score, speedFactor, complexity };
 };
 
@@ -124,7 +124,7 @@ const makeRoundConfig = (
   const baseSeconds = timeBand[0] + rng() * (timeBand[1] - timeBand[0]);
   const adjustedSeconds = clamp(baseSeconds * (1.1 - difficulty.score * 0.03), timeBand[0], timeBand[1]);
   const timeLimitMs = Math.round(adjustedSeconds * 1000);
-  const targetCount = Math.round(3 + difficulty.score * 0.7 + rng() * 2);
+  const targetCount = Math.round(4 + difficulty.score * 0.85 + rng() * 2);
 
   return {
     id: `${type}-${seed}-${index}`,
