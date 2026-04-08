@@ -78,7 +78,6 @@ export const ColorRound = ({
 
       setIndex((prev) => prev + 1);
       promptStart.current = performance.now();
-      setTimeLeft(timePerPrompt);
     },
     [correctCount, currentRule, index, onComplete, prompts, reactionTotal, round, timePerPrompt],
   );
