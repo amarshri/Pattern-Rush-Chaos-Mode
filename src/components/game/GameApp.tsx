@@ -218,6 +218,7 @@ export const GameApp = () => {
     if (level && roundIndex + 1 >= level.rounds.length) {
       finishLevel(nextResults);
     } else {
+      if (!level) return;
       const nextIndex = roundIndex + 1;
       setRoundIndex(nextIndex);
       startIntro(level.rounds[nextIndex].timeLimitMs);
